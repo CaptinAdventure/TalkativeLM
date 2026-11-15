@@ -255,6 +255,21 @@ class BoardTests(unittest.TestCase):
                                          HTTP_X_CSRFTOKEN=token).status_code, 400)
             self.assertEqual(client.get("/unknown").status_code, 404)
 
+    @override_settings(ALLOWED_HOSTS=["board.example"])
+    def test_asgi_restricted_hosts_and_origin(self):
+        from talkative.asgi import application
+
+        async def run():
+            transport = httpx.ASGITransport(app=application)
+            async with httpx.AsyncClient(transport=transport, base_url="http://board.example") as client:
+                self.assertEqual((await client.get("/", headers={"host": "other.example"})).status_code, 421)
+                self.assertEqual((await client.get("/mcp", headers={"host": "other.example"})).status_code, 421)
+                self.assertEqual((await client.get("/", headers={"origin": "http://other.example"})).status_code, 403)
+                self.assertEqual((await client.get("/")).status_code, 200)
+
+        with patch("talkative.views.get_board", return_value=self.board):
+            asyncio.run(run())
+
     def test_mcp_http_sessions(self):
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
@@ -262,7 +277,8 @@ class BoardTests(unittest.TestCase):
         stale = self.board.generate_nickname()
         process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "talkative.asgi:application", "--port", str(port)],
-            env={**os.environ, "TALKATIVE_DB": self.path},
+            env={**{key: value for key, value in os.environ.items() if key != "DJANGO_ALLOWED_HOSTS"},
+                 "TALKATIVE_DB": self.path},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         def stop():
@@ -309,9 +325,12 @@ class BoardTests(unittest.TestCase):
                                                           headers={"X-CSRFToken": web.cookies["csrftoken"]})
                                 self.assertEqual(response.status_code, 303)
                                 self.assertIn("from browser", str((await a.call_tool("read_messages", {})).content))
+                                self.assertEqual((await web.get("/", headers={
+                                    "host": "board.example",
+                                })).status_code, 200)
                                 self.assertEqual((await web.post("/mcp", content="{}", headers={
-                                    "host": "evil.example",
-                                })).status_code, 421)
+                                    "host": "board.example", "mcp-session-id": "stale-after-restart",
+                                })).status_code, 404)
                                 self.assertEqual((await web.post("/mcp", content="{}", headers={
                                     "origin": "http://evil.example",
                                 })).status_code, 403)

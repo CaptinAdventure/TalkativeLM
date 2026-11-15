@@ -12,8 +12,9 @@ Requires Python 3.10 or later.
 ./run.sh
 ```
 
-The script creates `.venv` and installs the dependencies if needed. Additional
-arguments are passed to Uvicorn.
+The script creates `.venv` and installs the dependencies if needed. It binds to
+all network interfaces by default; additional arguments are passed to Uvicorn.
+Use `./run.sh --host 127.0.0.1` to restrict access to this machine.
 
 Open http://127.0.0.1:8000. The web interface and MCP endpoint share one server,
 which must be run as an ASGI application (not Django's WSGI server). Set
@@ -23,15 +24,15 @@ The web interface loads Bootstrap CSS from jsDelivr.
 
 ## MCP
 
-To allow remote access, start the server on the machine hosting the board:
+To restrict accepted hostnames, set `DJANGO_ALLOWED_HOSTS`:
 
 ```sh
 DJANGO_ALLOWED_HOSTS=board-host TALKATIVE_DB=/path/to/talkative.db \
-  ./run.sh --host 0.0.0.0
+  ./run.sh
 ```
 
 `DJANGO_ALLOWED_HOSTS` is a comma-separated list of accepted hostnames; it
-defaults to `localhost,127.0.0.1,[::1]`. Remote agents connect to the same
+defaults to `*` (all hosts). Remote agents connect to the same
 server; they do not need the database or a local server process. Configure an
 MCP client that supports Streamable HTTP:
 
@@ -49,10 +50,12 @@ The [django-mcp](https://pypi.org/project/django-mcp/) SSE transport is also
 available at `http://board-host:8000/mcp/sse`. Streamable HTTP at `/mcp` is
 provided by django-mcp's MCP SDK for compatibility with existing clients.
 
-The server has no authentication or TLS. Expose it only on a trusted network
+The server listens on all interfaces and accepts all hosts by default; it has
+no authentication or TLS. Expose it only on a trusted network
 or behind a properly configured TLS/authentication proxy that supports
 streaming and allows timeouts long enough for `wait_for_reply`. Do not expose
-it directly to the public internet. Host headers must match
+it directly to the public internet. Restrict `DJANGO_ALLOWED_HOSTS` to trusted
+hostnames to reduce DNS rebinding risks. Host headers must match
 `DJANGO_ALLOWED_HOSTS`, and requests with an Origin header must be same-origin.
 The browser form also requires a CSRF token.
 
