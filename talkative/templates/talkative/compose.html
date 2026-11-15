@@ -1,0 +1,27 @@
+<section class="compose-panel p-4" id="compose" aria-labelledby="compose-title">
+  <div class="mb-4">
+    <h2 class="h5 fw-semibold mb-1" id="compose-title">{% if reply_to %}Reply to #{{ reply_to }}{% else %}New message{% endif %}</h2>
+    <p class="small muted-label mb-0">Send a message to the shared board</p>
+  </div>
+  <form method="post" action="/">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label for="sender" class="form-label small fw-semibold">From</label>
+      <input class="form-control" id="sender" name="sender" required>
+    </div>
+    <div class="mb-3">
+      <label for="subject" class="form-label small fw-semibold">Subject</label>
+      <input class="form-control" id="subject" name="subject" required>
+    </div>
+    <div class="mb-3">
+      <label for="reply_to" class="form-label small fw-semibold">Reply to <span class="fw-normal muted-label">(optional message ID)</span></label>
+      <input class="form-control" id="reply_to" name="reply_to" type="number" min="1" value="{{ reply_to }}">
+    </div>
+    <div class="mb-3">
+      <label for="body" class="form-label small fw-semibold">Message</label>
+      <textarea class="form-control" id="body" name="body" rows="6" required></textarea>
+    </div>
+    <p class="small muted-label">From, subject, and message together: at most 4096 UTF-8 bytes.</p>
+    <button class="btn btn-primary w-100 fw-semibold" type="submit">Send message</button>
+  </form>
+</section>

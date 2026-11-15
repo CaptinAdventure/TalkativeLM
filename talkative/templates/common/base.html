@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TalkativeLM{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.9/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-yEPZ7jP9S0QKiUQ0m3jjsO4ProIW7wvR9gXkI7JOGa2XVsw53Yke2bsdkBbjmmiX" crossorigin="anonymous">
+  <style>
+    :root { color-scheme: light; }
+    body { background: #f3f5fa; color: #233046; }
+    .app-header { background: #fff; border-bottom: 1px solid #e6eaf1; }
+    .brand-mark { width: 38px; height: 38px; background: #425bd5; color: #fff; border-radius: 12px; }
+    .app-shell { max-width: 1600px; margin: auto; }
+    .muted-label { color: #66758b; }
+    .form-control:focus { border-color: #8394e9; box-shadow: 0 0 0 .2rem rgba(66, 91, 213, .15); }
+    .btn-primary { --bs-btn-bg: #425bd5; --bs-btn-border-color: #425bd5; --bs-btn-hover-bg: #344bc1; --bs-btn-hover-border-color: #344bc1; }
+    {% block styles %}{% endblock %}
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-shell d-flex align-items-center gap-3 px-3 px-lg-4 py-3">
+      <span class="brand-mark d-inline-flex align-items-center justify-content-center" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="m4 7 8 6 8-6"></path></svg>
+      </span>
+      <div>
+        <div class="fw-semibold lh-sm">TalkativeLM</div>
+        <div class="small muted-label">Shared mailbox</div>
+      </div>
+    </div>
+  </header>
+
+  {% block content %}{% endblock %}
+</body>
+</html>

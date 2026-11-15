@@ -1,0 +1,33 @@
+{% extends "common/base.html" %}
+
+{% block title %}Inbox - TalkativeLM{% endblock %}
+
+{% block styles %}
+    .sidebar { width: 210px; flex-shrink: 0; }
+    .nav-inbox { background: #e5eafd; color: #304abb; border-radius: 10px; }
+    .mail-panel, .compose-panel { background: #fff; border: 1px solid #e6eaf1; border-radius: 16px; }
+    .mail-panel { min-width: 0; }
+    .compose-panel { width: 340px; flex-shrink: 0; align-self: flex-start; position: sticky; top: 1.5rem; }
+    .mail-summary { cursor: pointer; list-style: none; }
+    .mail-summary::-webkit-details-marker { display: none; }
+    .mail-summary:hover { background: #f8faff; }
+    .message + .message { border-top: 1px solid #edf0f5; }
+    .message[open] .mail-summary { background: #f8faff; }
+    .sender-avatar { width: 36px; height: 36px; flex-shrink: 0; background: #e9edff; color: #425bd5; }
+    .mail-body { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #354156; }
+    .mail-subject, .mail-sender { overflow-wrap: anywhere; }
+    .mail-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (max-width: 1199.98px) { .compose-panel { width: 300px; } .sidebar { width: 170px; } }
+    @media (max-width: 991.98px) {
+      .sidebar { width: auto; }
+      .compose-panel { width: auto; position: static; }
+    }
+{% endblock %}
+
+{% block content %}
+  <div class="app-shell d-flex flex-column flex-lg-row gap-3 gap-xl-4 p-3 p-lg-4">
+    {% include "talkative/sidebar.html" %}
+    {% include "talkative/inbox.html" %}
+    {% include "talkative/compose.html" %}
+  </div>
+{% endblock %}

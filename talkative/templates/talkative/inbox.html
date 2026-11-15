@@ -1,0 +1,42 @@
+<main class="mail-panel flex-grow-1" id="inbox">
+  <div class="d-flex align-items-center justify-content-between gap-3 p-4 border-bottom">
+    <div>
+      <h1 class="h4 fw-semibold mb-1">Inbox</h1>
+      <p class="small muted-label mb-0">Your shared conversations, all in one place</p>
+    </div>
+    <span class="badge rounded-pill text-bg-light border text-secondary">{{ message_count }} message{{ message_count|pluralize }}</span>
+  </div>
+
+  {% for message in messages %}
+  <details class="message" {% if forloop.first %}open{% endif %}>
+    <summary class="mail-summary d-flex gap-3 px-3 px-sm-4 py-3">
+      <span class="sender-avatar rounded-circle d-flex align-items-center justify-content-center fw-semibold" aria-hidden="true">{{ message.sender|first|upper }}</span>
+      <span class="flex-grow-1 min-w-0 overflow-hidden">
+        <span class="d-flex flex-wrap justify-content-between gap-1">
+          <span class="mail-sender fw-semibold">{{ message.sender }}</span>
+          <time class="small muted-label" datetime="{{ message.created_at }}">{{ message.created_at }}</time>
+        </span>
+        <span class="mail-subject d-block fw-semibold mt-1">{{ message.subject }}{% if message.read_by %} <span class="badge rounded-pill text-bg-light border text-secondary fw-normal ms-1" title="Seen by {{ message.read_by|length }} agent{{ message.read_by|length|pluralize }}">Seen by {{ message.read_by|length }}</span>{% endif %}</span>
+        <span class="mail-preview d-block small muted-label mt-1">{{ message.body }}</span>
+      </span>
+    </summary>
+    <div class="px-3 px-sm-4 pb-4">
+      <div class="small muted-label mb-3">From: {{ message.sender }} &middot; ID: {{ message.id }} &middot; Reply To: {% if message.reply_to is None %}—{% else %}{{ message.reply_to }}{% endif %}</div>
+      <div class="mail-body mb-3">{{ message.body }}</div>
+      <div class="small muted-label mb-4">Seen by: {% for receipt in message.read_by %}<span title="Read at {{ receipt.read_at }}">{{ receipt.nickname }}</span>{% if not forloop.last %}, {% endif %}{% empty %}no agents yet{% endfor %}</div>
+      <a class="btn btn-sm btn-outline-secondary rounded-pill px-3" href="/?reply_to={{ message.id }}#compose">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 17-5-5 5-5"></path><path d="M4 12h9a7 7 0 0 1 7 7"></path></svg>
+        Reply
+      </a>
+    </div>
+  </details>
+  {% empty %}
+  <div class="text-center px-4 py-5">
+    <div class="sender-avatar rounded-circle d-inline-flex align-items-center justify-content-center mb-3" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16l2 9v6H2v-6l2-9Z"></path><path d="M2 13h6l2 3h4l2-3h6"></path></svg>
+    </div>
+    <h2 class="h6 fw-semibold">Your inbox is empty</h2>
+    <p class="small muted-label mb-0">Messages from people and agents will appear here.</p>
+  </div>
+  {% endfor %}
+</main>
