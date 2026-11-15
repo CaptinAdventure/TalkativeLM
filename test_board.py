@@ -4,22 +4,19 @@ import socket
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import unittest
-from http.client import HTTPConnection
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlencode
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+import httpx
+from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from starlette.testclient import TestClient
 
 from board import Board
 from mcp_server import create_server
-from web import handler_for
 
 
 class BoardTests(unittest.TestCase):
@@ -66,48 +63,27 @@ class BoardTests(unittest.TestCase):
         self.assertIsNone(asyncio.run(tools["wait_for_reply"](a, second, 0)))
 
     def test_web_form_and_escaping(self):
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(self.board))
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
-        self.addCleanup(thread.join)
-        self.addCleanup(server.server_close)
-        self.addCleanup(server.shutdown)
-        conn = HTTPConnection("127.0.0.1", server.server_port)
-        self.addCleanup(conn.close)
-        body = urlencode({"sender": "human", "subject": "<script>", "body": "Hello", "reply_to": ""})
-        conn.request("POST", "/", body, {"Content-Type": "application/x-www-form-urlencoded"})
-        response = conn.getresponse()
-        self.assertEqual(response.status, 303)
-        response.read()
-        conn.request("GET", "/")
-        response = conn.getresponse()
-        page = response.read().decode()
-        self.assertIn("&lt;script&gt;", page)
-        self.assertNotIn("<script>", page)
-        self.assertIn("From: human", page)
-        conn.request("POST", "/", urlencode({"sender": "a", "subject": "s", "body": "b", "reply_to": "999"}),
-                     {"Content-Type": "application/x-www-form-urlencoded"})
-        self.assertEqual(conn.getresponse().status, 400)
-
-    def test_mcp_stdio_protocol(self):
-        async def run():
-            params = StdioServerParameters(
-                command="python",
-                args=[str(Path(__file__).with_name("mcp_server.py")), "--transport", "stdio"],
-                env={**os.environ, "TALKATIVE_DB": self.path},
-            )
-            async with stdio_client(params) as (read, write):
-                async with ClientSession(read, write) as client:
-                    await client.initialize()
-                    result = await client.call_tool("generate_nickname", {})
-                    self.assertFalse(result.isError)
-                    result = await client.call_tool("create_message", {"subject": "hi", "body": "there"})
-                    self.assertFalse(result.isError)
-                    result = await client.call_tool("read_messages", {})
-                    self.assertFalse(result.isError)
-                    self.assertIn("there", str(result.content))
-
-        asyncio.run(run())
+        with TestClient(create_server(self.board).streamable_http_app()) as client:
+            response = client.post("/", data={"sender": "human", "subject": "<script>", "body": "Hello",
+                                               "reply_to": ""}, follow_redirects=False)
+            self.assertEqual(response.status_code, 303)
+            response = client.get("/")
+            self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+            self.assertIn("&lt;script&gt;", response.text)
+            self.assertNotIn("<script>", response.text)
+            self.assertIn("From: human", response.text)
+            response = client.post("/", data={"sender": "a", "subject": "s", "body": "b", "reply_to": "999"})
+            self.assertEqual(response.status_code, 400)
+            response = client.post("/", content=urlencode([("sender", "a"), ("sender", "b")]),
+                                   headers={"content-type": "application/x-www-form-urlencoded"})
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(client.post("/", content="x" * 16385,
+                                         headers={"content-type": "application/x-www-form-urlencoded"}).status_code, 400)
+            self.assertEqual(client.get("/unknown").status_code, 404)
+            self.assertEqual(client.post("/mcp", content="{}", headers={
+                "host": "evil.example", "content-type": "application/json",
+                "accept": "application/json, text/event-stream",
+            }).status_code, 421)
 
     def test_mcp_http_sessions(self):
         with socket.socket() as sock:
@@ -115,7 +91,7 @@ class BoardTests(unittest.TestCase):
             port = sock.getsockname()[1]
         process = subprocess.Popen(
             [sys.executable, str(Path(__file__).with_name("mcp_server.py")),
-             "--host", "0.0.0.0", "--port", str(port)],
+             "--port", str(port)],
             env={**os.environ, "TALKATIVE_DB": self.path},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
@@ -155,9 +131,16 @@ class BoardTests(unittest.TestCase):
                             self.assertNotEqual(nick_a.content[0].text, nick_b.content[0].text)
                             self.assertEqual((await a.call_tool("generate_nickname", {})).content[0].text,
                                              nick_a.content[0].text)
+                            async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as web:
+                                response = await web.post("/", data={"sender": "human", "subject": "web",
+                                                                     "body": "from browser"})
+                                self.assertEqual(response.status_code, 303)
+                                self.assertIn("from browser", str((await a.call_tool("read_messages", {})).content))
                             posted = await a.call_tool("create_message", {"subject": "hello", "body": "world"})
                             self.assertFalse(posted.isError)
                             message_id = int(posted.content[0].text)
+                            async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as web:
+                                self.assertIn("world", (await web.get("/")).text)
                             self.assertIn("world", str((await a.call_tool("read_messages", {})).content))
                             self.assertNotIn("world", str((await a.call_tool("read_messages", {})).content))
                             self.assertIn("world", str((await b.call_tool("read_messages", {})).content))
