@@ -1,7 +1,11 @@
 import asyncio
 import os
+import socket
+import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
@@ -11,6 +15,7 @@ from urllib.parse import urlencode
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 
 from board import Board
 from mcp_server import create_server
@@ -88,7 +93,7 @@ class BoardTests(unittest.TestCase):
         async def run():
             params = StdioServerParameters(
                 command="python",
-                args=[str(Path(__file__).with_name("mcp_server.py"))],
+                args=[str(Path(__file__).with_name("mcp_server.py")), "--transport", "stdio"],
                 env={**os.environ, "TALKATIVE_DB": self.path},
             )
             async with stdio_client(params) as (read, write):
@@ -101,6 +106,67 @@ class BoardTests(unittest.TestCase):
                     result = await client.call_tool("read_messages", {})
                     self.assertFalse(result.isError)
                     self.assertIn("there", str(result.content))
+
+        asyncio.run(run())
+
+    def test_mcp_http_sessions(self):
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        process = subprocess.Popen(
+            [sys.executable, str(Path(__file__).with_name("mcp_server.py")),
+             "--host", "0.0.0.0", "--port", str(port)],
+            env={**os.environ, "TALKATIVE_DB": self.path},
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        def stop():
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        self.addCleanup(stop)
+        deadline = time.monotonic() + 10
+        while True:
+            if process.poll() is not None:
+                self.fail("MCP server exited before starting")
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                    break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    self.fail("MCP server did not start")
+                time.sleep(0.05)
+
+        async def run():
+            url = f"http://127.0.0.1:{port}/mcp"
+            async with streamable_http_client(url) as (read_a, write_a, _):
+                async with ClientSession(read_a, write_a) as a:
+                    await a.initialize()
+                    async with streamable_http_client(url) as (read_b, write_b, _):
+                        async with ClientSession(read_b, write_b) as b:
+                            await b.initialize()
+                            self.assertTrue((await a.call_tool("read_messages", {})).isError)
+                            nick_a = await a.call_tool("generate_nickname", {})
+                            nick_b = await b.call_tool("generate_nickname", {})
+                            self.assertFalse(nick_a.isError)
+                            self.assertFalse(nick_b.isError)
+                            self.assertNotEqual(nick_a.content[0].text, nick_b.content[0].text)
+                            self.assertEqual((await a.call_tool("generate_nickname", {})).content[0].text,
+                                             nick_a.content[0].text)
+                            posted = await a.call_tool("create_message", {"subject": "hello", "body": "world"})
+                            self.assertFalse(posted.isError)
+                            message_id = int(posted.content[0].text)
+                            self.assertIn("world", str((await a.call_tool("read_messages", {})).content))
+                            self.assertNotIn("world", str((await a.call_tool("read_messages", {})).content))
+                            self.assertIn("world", str((await b.call_tool("read_messages", {})).content))
+                            reply = await b.call_tool("create_message",
+                                                      {"subject": "re", "body": "answer", "reply_to": message_id})
+                            self.assertFalse(reply.isError)
+                            waited = await a.call_tool("wait_for_reply", {"message_id": message_id, "timeout": 0})
+                            self.assertIn("answer", str(waited.content))
+                            self.assertIn("answer", str((await a.call_tool("read_messages", {})).content))
 
         asyncio.run(run())
 

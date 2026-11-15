@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import math
 import threading
@@ -8,10 +9,12 @@ from mcp.server.fastmcp import Context, FastMCP
 from board import Board, default_db_path
 
 
-def create_server(board):
+def create_server(board, host="127.0.0.1", port=8001):
     server = FastMCP(
         "TalkativeLM",
         instructions="Call generate_nickname first. Messages are shared with humans and other agents.",
+        host=host,
+        port=port,
     )
     sessions = weakref.WeakKeyDictionary()
     lock = threading.RLock()
@@ -71,4 +74,9 @@ def create_server(board):
 
 
 if __name__ == "__main__":
-    create_server(Board(default_db_path())).run(transport="stdio")
+    parser = argparse.ArgumentParser(description="Run the TalkativeLM MCP server")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8001)
+    parser.add_argument("--transport", choices=("streamable-http", "stdio"), default="streamable-http")
+    args = parser.parse_args()
+    create_server(Board(default_db_path()), host=args.host, port=args.port).run(transport=args.transport)
